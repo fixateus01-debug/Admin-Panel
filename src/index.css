@@ -1,0 +1,12 @@
+@import "tailwindcss";
+@import "katex/dist/katex.min.css";
+@import "quill/dist/quill.snow.css";
+
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: Inter, sans-serif;
+}
