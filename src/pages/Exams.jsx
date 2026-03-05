@@ -10,6 +10,7 @@ import {
   onSnapshot,
 } from "firebase/firestore";
 import { logActivity } from "../utils/logActivity";
+import Swal from "sweetalert2";
 
 const ITEMS_PER_PAGE = 5;
 
@@ -99,8 +100,10 @@ export default function Exams() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!formData.name || !formData.year)
-      return alert("Exam Name and Year required");
+    if (!formData.name || !formData.year) {
+      Swal.fire("Missing Fields", "Exam Name and Year required", "warning");
+      return;
+    }
 
     if (editingExam) {
       await updateDoc(doc(db, "exams", editingExam.id), formData);
@@ -128,6 +131,13 @@ export default function Exams() {
       });
     }
 
+    Swal.fire({
+      icon: "success",
+      title: editingExam ? "Exam Updated" : "Exam Created",
+      timer: 1500,
+      showConfirmButton: false
+    });
+
     resetForm();
   };
 
@@ -152,9 +162,21 @@ export default function Exams() {
   };
 
   const bulkDelete = async () => {
-    if (!confirm("Delete selected exams?")) return;
+
+    const confirm = await Swal.fire({
+      title: "Delete Selected Exams?",
+      text: `You are deleting ${selected.length} exams`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#d33",
+      cancelButtonColor: "#3085d6",
+      confirmButtonText: "Yes, delete"
+    });
+
+    if (!confirm.isConfirmed) return;
 
     for (let id of selected) {
+
       const exam = exams.find(e => e.id === id);
 
       await deleteDoc(doc(db, "exams", id));
@@ -165,9 +187,16 @@ export default function Exams() {
         entityId: id,
         entityType: "exam",
       });
+
     }
 
     setSelected([]);
+
+    Swal.fire(
+      "Deleted!",
+      "Selected exams deleted successfully",
+      "success"
+    );
   };
 
   return (
@@ -224,7 +253,6 @@ export default function Exams() {
               <th className="p-3">Exam Name</th>
               <th className="p-3">Year</th>
               <th className="p-3">Active</th>
-              <th className="p-3">Subscriptions</th>
               <th className="p-3">Actions</th>
             </tr>
           </thead>
@@ -247,10 +275,6 @@ export default function Exams() {
                   {exam.isActive ? "Active" : "Inactive"}
                 </td>
 
-                <td className="p-3 text-sm">
-                  {exam.subscriptionPlanIds?.length || 0} Plans
-                </td>
-
                 <td className="p-3 space-x-3">
                   <button
                     onClick={() => {
@@ -265,13 +289,29 @@ export default function Exams() {
 
                   <button
                     onClick={async () => {
+
+                      const confirm = await Swal.fire({
+                        title: "Delete Exam?",
+                        text: "This cannot be undone",
+                        icon: "warning",
+                        showCancelButton: true,
+                        confirmButtonColor: "#d33",
+                        cancelButtonColor: "#3085d6",
+                        confirmButtonText: "Yes, delete it"
+                      });
+
+                      if (!confirm.isConfirmed) return;
+
                       await deleteDoc(doc(db, "exams", exam.id));
+
                       await logActivity({
                         actionType: "DELETE_EXAM",
                         description: `Deleted exam: ${exam.name}`,
                         entityId: exam.id,
                         entityType: "exam",
                       });
+
+                      Swal.fire("Deleted!", "Exam removed successfully", "success");
                     }}
                     className="text-red-600"
                   >
@@ -347,31 +387,6 @@ export default function Exams() {
                 }
                 className="w-full border p-3 rounded"
               />
-
-              {/* <label className="block font-semibold">
-                Linked Subscription Plans
-              </label>
-
-              <select
-                multiple
-                value={formData.subscriptionPlanIds}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    subscriptionPlanIds: Array.from(
-                      e.target.selectedOptions,
-                      (option) => option.value
-                    ),
-                  })
-                }
-                className="w-full border p-3 rounded"
-              >
-                {subscriptionPlans.map((plan) => (
-                  <option key={plan.id} value={plan.id}>
-                    {plan.name}
-                  </option>
-                ))}
-              </select> */}
 
               <label className="flex items-center gap-2">
                 <input

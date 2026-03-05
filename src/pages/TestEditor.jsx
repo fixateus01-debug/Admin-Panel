@@ -13,7 +13,6 @@ import {
 import Swal from "sweetalert2";
 import SectionsManager from "../components/SectionsManager";
 import QuestionsManager from "../components/QuestionsManager";
-import PyqsManager from "../components/PyqsManager";
 import { logActivity } from "../utils/logActivity";
 
 export default function TestEditor() {
@@ -44,7 +43,7 @@ export default function TestEditor() {
     randomizeOptions: false,
 
     timing: {
-      totalDurationMinutes: 120,
+      totalDurationMinutes: 0,
       serverEnforced: true,
     },
 
@@ -185,8 +184,8 @@ export default function TestEditor() {
           <button
             onClick={() => setActiveTab("settings")}
             className={`pb-3 px-1 font-medium transition-colors ${activeTab === "settings"
-                ? "text-indigo-600 border-b-2 border-indigo-600"
-                : "text-gray-600 hover:text-gray-900"
+              ? "text-indigo-600 border-b-2 border-indigo-600"
+              : "text-gray-600 hover:text-gray-900"
               }`}
           >
             Test Settings
@@ -194,8 +193,8 @@ export default function TestEditor() {
           <button
             onClick={() => setActiveTab("sections")}
             className={`pb-3 px-1 font-medium transition-colors ${activeTab === "sections"
-                ? "text-indigo-600 border-b-2 border-indigo-600"
-                : "text-gray-600 hover:text-gray-900"
+              ? "text-indigo-600 border-b-2 border-indigo-600"
+              : "text-gray-600 hover:text-gray-900"
               }`}
           >
             Sections
@@ -203,20 +202,11 @@ export default function TestEditor() {
           <button
             onClick={() => setActiveTab("questions")}
             className={`pb-3 px-1 font-medium transition-colors ${activeTab === "questions"
-                ? "text-indigo-600 border-b-2 border-indigo-600"
-                : "text-gray-600 hover:text-gray-900"
+              ? "text-indigo-600 border-b-2 border-indigo-600"
+              : "text-gray-600 hover:text-gray-900"
               }`}
           >
             Questions
-          </button>
-          <button
-            onClick={() => setActiveTab("pyqs")}
-            className={`pb-3 px-1 font-medium transition-colors ${activeTab === "pyqs"
-                ? "text-indigo-600 border-b-2 border-indigo-600"
-                : "text-gray-600 hover:text-gray-900"
-              }`}
-          >
-            PYQs
           </button>
         </div>
       )}
@@ -364,6 +354,44 @@ export default function TestEditor() {
             </label>
           </div>
 
+          {/* TEST TIMING */}
+          <div>
+            <h3 className="font-bold mb-4">Test Timing</h3>
+
+            <label>Total Duration (Minutes)</label>
+            <input
+              type="number"
+              className="border p-2 rounded w-full"
+              value={formData.timing.totalDurationMinutes}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  timing: {
+                    ...formData.timing,
+                    totalDurationMinutes: Number(e.target.value),
+                  },
+                })
+              }
+            />
+
+            <label className="flex gap-2 mt-3">
+              <input
+                type="checkbox"
+                checked={formData.timing.serverEnforced}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    timing: {
+                      ...formData.timing,
+                      serverEnforced: e.target.checked,
+                    },
+                  })
+                }
+              />
+              Enforce Server Timing
+            </label>
+          </div>
+
           {/* ATTEMPTS & RANDOMIZATION */}
           <div>
             <h3 className="font-bold mb-4">Attempts & Randomization</h3>
@@ -461,10 +489,6 @@ export default function TestEditor() {
           testId={testId}
           sections={sections}
         />
-      )}
-
-      {activeTab === "pyqs" && !isNew && (
-        <PyqsManager examId={examId} />
       )}
     </div>
   );

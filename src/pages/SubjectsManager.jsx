@@ -21,6 +21,11 @@ export default function SubjectsManager() {
   const [chapters, setChapters] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const totalSubjects = subjects.length;
+  const totalChapters = subjects.reduce(
+    (sum, sub) => sum + (sub.chapters?.length || 0),
+    0
+  );
 
   /* ---------------- FETCH SUBJECTS ---------------- */
 
@@ -189,6 +194,37 @@ export default function SubjectsManager() {
             className="border p-3 rounded w-full"
             value={subjectName}
             onChange={(e) => setSubjectName(e.target.value)}
+            onKeyDown={async (e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+
+                // Prevent empty subject
+                if (!subjectName.trim()) return;
+
+                // Prevent duplicate subject
+                const exists = subjects.some(
+                  (s) => s.name.toLowerCase() === subjectName.trim().toLowerCase()
+                );
+                if (exists) return Swal.fire("Error", "Subject already exists", "error");
+
+                // Save subject
+                const ref = await addDoc(collection(db, "subjects"), {
+                  name: subjectName.trim(),
+                  chapters: [],
+                  createdAt: serverTimestamp(),
+                });
+
+                await logActivity({
+                  actionType: "CREATE_SUBJECT",
+                  description: `Created subject: ${subjectName}`,
+                  entityId: ref.id,
+                  entityType: "subject",
+                });
+
+                Swal.fire("Success", "Subject added", "success");
+                setSubjectName("");
+              }
+            }}
           />
         </div>
 
@@ -196,16 +232,26 @@ export default function SubjectsManager() {
           <label className="block font-semibold mb-2">Add Chapter</label>
           <div className="flex gap-3">
             <input
-              className="border p-3 rounded flex-1"
+              className="border p-3 rounded w-full"
+              placeholder="Type chapter name and press Enter"
               value={chapterInput}
               onChange={(e) => setChapterInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  const trimmed = chapterInput.trim();
+                  if (!trimmed) return;
+
+                  // Prevent duplicate chapter
+                  if (chapters.includes(trimmed)) {
+                    return Swal.fire("Error", "Chapter already exists", "error");
+                  }
+
+                  setChapters((prev) => [...prev, trimmed]);
+                  setChapterInput("");
+                }
+              }}
             />
-            <button
-              onClick={addChapter}
-              className="bg-indigo-600 text-white px-4 rounded"
-            >
-              Add
-            </button>
           </div>
         </div>
 
@@ -244,6 +290,16 @@ export default function SubjectsManager() {
               Cancel
             </button>
           )}
+        </div>
+      </div>
+
+      {/* SUBJECT COUNTS */}
+      <div className="mb-4 flex gap-6">
+        <div className="font-semibold">
+          Total Subjects: <span className="text-indigo-600">{totalSubjects}</span>
+        </div>
+        <div className="font-semibold">
+          Total Chapters: <span className="text-indigo-600">{totalChapters}</span>
         </div>
       </div>
 

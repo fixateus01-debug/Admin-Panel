@@ -52,8 +52,26 @@ export default function SectionsManager({ examId, testId }) {
 
   const handleSave = async () => {
     try {
-      if (!formData.name)
+
+      // Validate section name
+      if (!formData.name) {
         return Swal.fire("Error", "Section name required", "error");
+      }
+
+      // 🔴 Check if the order already exists
+      const duplicateOrder = sections.find(
+        (section) =>
+          section.order === formData.order &&
+          (!editingSection || section.id !== editingSection.id)
+      );
+
+      if (duplicateOrder) {
+        return Swal.fire({
+          icon: "error",
+          title: "Duplicate Order",
+          text: `Order ${formData.order} already added. Please choose another order.`,
+        });
+      }
 
       if (editingSection) {
         await updateDoc(
@@ -88,6 +106,7 @@ export default function SectionsManager({ examId, testId }) {
       setShowModal(false);
       setEditingSection(null);
       setFormData(emptySection);
+
     } catch (err) {
       Swal.fire("Error", err.message, "error");
     }
