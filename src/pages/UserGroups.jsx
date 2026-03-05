@@ -178,6 +178,49 @@ export default function UserGroups() {
     });
   };
 
+  /* ---------------- EDIT GROUP ---------------- */
+  const handleEdit = (group) => {
+    setEditingGroup(group);
+
+    setFormData({
+      name: group.name || "",
+      promoCode: group.promoCode || "",
+      discountPercentage: group.discountPercentage || 0,
+      description: group.description || "",
+      isActive: group.isActive ?? true,
+      specialTests: group.specialTests || [],
+      specialPyqs: group.specialPyqs || [],
+      userIds: group.userIds || []
+    });
+
+    setShowModal(true);
+  };
+
+
+  /* ---------------- DELETE GROUP ---------------- */
+  const handleDelete = async (groupId) => {
+
+    const confirm = await Swal.fire({
+      title: "Delete this group?",
+      text: "This action cannot be undone",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#d33",
+      cancelButtonColor: "#3085d6",
+      confirmButtonText: "Yes, delete it"
+    });
+
+    if (!confirm.isConfirmed) return;
+
+    await deleteDoc(doc(db, "userGroups", groupId));
+
+    Swal.fire(
+      "Deleted!",
+      "Group has been deleted.",
+      "success"
+    );
+  };
+
   return (
     <div className="p-10 bg-slate-100 min-h-screen">
 
@@ -202,6 +245,7 @@ export default function UserGroups() {
               <th className="p-3">Promo</th>
               <th className="p-3">Discount</th>
               <th className="p-3">Status</th>
+              <th className="p-3">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -214,6 +258,23 @@ export default function UserGroups() {
                 <td className="p-3">
                   {group.isActive ? "Active" : "Inactive"}
                 </td>
+                <td className="p-3 flex gap-2">
+
+                  <button
+                    onClick={() => handleEdit(group)}
+                    className="bg-blue-500 text-white px-3 py-1 rounded"
+                  >
+                    Edit
+                  </button>
+
+                  <button
+                    onClick={() => handleDelete(group.id)}
+                    className="bg-red-500 text-white px-3 py-1 rounded"
+                  >
+                    Delete
+                  </button>
+
+                </td>
               </tr>
             ))}
           </tbody>
@@ -225,7 +286,9 @@ export default function UserGroups() {
         <div className="fixed inset-0 bg-black/40 flex justify-center items-center">
           <div className="bg-white w-full max-w-4xl p-6 rounded-xl shadow overflow-y-auto max-h-[90vh]">
 
-            <h3 className="text-xl font-bold mb-4">Create User Group</h3>
+            <h3 className="text-xl font-bold mb-4">
+              {editingGroup ? "Edit User Group" : "Create User Group"}
+            </h3>
 
             <form onSubmit={handleSubmit} className="space-y-6">
 
@@ -235,7 +298,7 @@ export default function UserGroups() {
                 <input
                   className="w-full border p-3 rounded"
                   value={formData.name}
-                  onChange={e => setFormData({...formData, name: e.target.value})}
+                  onChange={e => setFormData({ ...formData, name: e.target.value })}
                 />
               </div>
 
@@ -245,7 +308,7 @@ export default function UserGroups() {
                 <input
                   className="w-full border p-3 rounded"
                   value={formData.promoCode}
-                  onChange={e => setFormData({...formData, promoCode: e.target.value})}
+                  onChange={e => setFormData({ ...formData, promoCode: e.target.value })}
                 />
               </div>
 
@@ -257,7 +320,7 @@ export default function UserGroups() {
                   className="w-full border p-3 rounded"
                   value={formData.discountPercentage}
                   onChange={e =>
-                    setFormData({...formData, discountPercentage: Number(e.target.value)})
+                    setFormData({ ...formData, discountPercentage: Number(e.target.value) })
                   }
                 />
               </div>
@@ -287,7 +350,7 @@ export default function UserGroups() {
 
                 <label className="mt-2 block bg-indigo-600 text-white px-3 py-2 rounded cursor-pointer w-fit">
                   Bulk Import Excel
-                  <input type="file" hidden accept=".xlsx" onChange={handleExcelUpload}/>
+                  <input type="file" hidden accept=".xlsx" onChange={handleExcelUpload} />
                 </label>
               </div>
 
@@ -333,7 +396,7 @@ export default function UserGroups() {
                   type="submit"
                   className="bg-indigo-600 text-white px-6 py-2 rounded"
                 >
-                  Save Group
+                  {editingGroup ? "Update Group" : "Save Group"}
                 </button>
               </div>
 

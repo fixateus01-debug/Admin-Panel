@@ -19,8 +19,12 @@ export default function PyqsManager({ examId }) {
     const [allChapters, setAllChapters] = useState([]);
     const [showModal, setShowModal] = useState(false);
     const [editingData, setEditingData] = useState(null);
+    const [exams, setExams] = useState([]);
+    const [filterLock, setFilterLock] = useState("");
+    const [filterStatus, setFilterStatus] = useState("");
 
     const emptyForm = {
+        examId: "",
         subjectId: "",
         chapterName: "",
         questionCount: 0,
@@ -34,7 +38,7 @@ export default function PyqsManager({ examId }) {
     const [filterSubject, setFilterSubject] = useState("");
     const [searchTerm, setSearchTerm] = useState("");
 
-    const ITEMS_PER_PAGE = 5;
+    const ITEMS_PER_PAGE = 20;
     const [currentPage, setCurrentPage] = useState(1);
 
     /* ---------------- FETCH SUBJECTS ---------------- */
@@ -52,69 +56,97 @@ export default function PyqsManager({ examId }) {
         fetchSubjects();
     }, []);
 
+    /* ---------------- FETCH EXAMS ---------------- */
+
+    useEffect(() => {
+        const fetchExams = async () => {
+            const snap = await getDocs(collection(db, "exams"));
+
+            setExams(
+                snap.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }))
+            );
+        };
+
+        fetchExams();
+    }, []);
+
     /* ---------------- FETCH PYQS ---------------- */
 
     useEffect(() => {
-        if (!examId) return;
 
         const fetchData = async () => {
 
-            const pyqSubjectsSnap = await getDocs(
-                collection(db, "exams", examId, "pyqs")
-            );
+            const examsSnap = await getDocs(collection(db, "exams"));
 
             let temp = [];
 
-            for (let subjectDoc of pyqSubjectsSnap.docs) {
+            for (let examDoc of examsSnap.docs) {
 
-                const subjectId = subjectDoc.id;
-                const subjectName = subjectDoc.data().name;
+                const examId = examDoc.id;
+                const examName = examDoc.data().name;
 
-                const chaptersSnap = await getDocs(
-                    collection(
-                        db,
-                        "exams",
-                        examId,
-                        "pyqs",
-                        subjectId,
-                        "chapters"
-                    )
+                const pyqSubjectsSnap = await getDocs(
+                    collection(db, "exams", examId, "pyqs")
                 );
 
-                chaptersSnap.docs.forEach(ch => {
-                    temp.push({
-                        id: ch.id,
-                        subjectId,
-                        subjectName,
-                        ...ch.data(),
-                    });
-                });
-            }
+                for (let subjectDoc of pyqSubjectsSnap.docs) {
 
+                    const subjectId = subjectDoc.id;
+                    const subjectName = subjectDoc.data().name;
+
+                    const chaptersSnap = await getDocs(
+                        collection(
+                            db,
+                            "exams",
+                            examId,
+                            "pyqs",
+                            subjectId,
+                            "chapters"
+                        )
+                    );
+
+                    chaptersSnap.docs.forEach(ch => {
+
+                        temp.push({
+                            id: ch.id,
+                            examId,
+                            examName,
+                            subjectId,
+                            subjectName,
+                            ...ch.data(),
+                        });
+
+                    });
+                }
+            }
             setAllChapters(temp);
         };
-
         fetchData();
-
-    }, [examId]);
+    }, []);
 
     /* ---------------- FILTER + SEARCH ---------------- */
 
     const filteredData = useMemo(() => {
         return allChapters.filter(item => {
-
-            const matchesSubject = filterSubject
-                ? item.subjectId === filterSubject
-                : true;
-
+            const matchesSubject = filterSubject ? item.subjectId === filterSubject : true;
             const matchesSearch =
                 item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 item.subjectName?.toLowerCase().includes(searchTerm.toLowerCase());
 
-            return matchesSubject && matchesSearch;
+            const matchesLock =
+                filterLock === "locked" ? item.isLocked === true
+                    : filterLock === "unlocked" ? item.isLocked === false
+                        : true;
 
+            const matchesStatus =
+                filterStatus ? item.status === filterStatus : true;
+
+            return matchesSubject && matchesSearch && matchesLock && matchesStatus;
         });
-    }, [allChapters, filterSubject, searchTerm]);
+    }, [allChapters, filterSubject, searchTerm, filterLock, filterStatus]);
 
     const totalPages = Math.ceil(filteredData.length / ITEMS_PER_PAGE);
 
@@ -129,6 +161,9 @@ export default function PyqsManager({ examId }) {
 
         try {
 
+            if (!formData.examId)
+                return Swal.fire("Error", "Please select Exam", "error");
+
             if (!formData.subjectId)
                 return Swal.fire("Error", "Please select Subject", "error");
 
@@ -136,7 +171,7 @@ export default function PyqsManager({ examId }) {
                 return Swal.fire("Error", "Please select Chapter", "error");
 
             await setDoc(
-                doc(db, "exams", examId, "pyqs", formData.subjectId),
+                doc(db, "exams", formData.examId, "pyqs", formData.subjectId),
                 {
                     name: subjects.find(s => s.id === formData.subjectId)?.name || "",
                 },
@@ -161,7 +196,7 @@ export default function PyqsManager({ examId }) {
                 const docRef = doc(
                     db,
                     "exams",
-                    examId,
+                    formData.examId,
                     "pyqs",
                     formData.subjectId,
                     "chapters",
@@ -218,7 +253,7 @@ export default function PyqsManager({ examId }) {
 
                 const pdfRef = ref(
                     storage,
-                    `pyqs/${examId}/${formData.subjectId}/${Date.now()}-${pdfFile.name}`
+                    `pyqs/${formData.examId}/${formData.subjectId}/${Date.now()}-${pdfFile.name}`
                 );
 
                 uploadBytes(pdfRef, pdfFile).then(async () => {
@@ -228,7 +263,7 @@ export default function PyqsManager({ examId }) {
                     const updateRef = doc(
                         db,
                         "exams",
-                        examId,
+                        formData.examId,
                         "pyqs",
                         formData.subjectId,
                         "chapters",
@@ -269,7 +304,7 @@ export default function PyqsManager({ examId }) {
             doc(
                 db,
                 "exams",
-                examId,
+                item.examId,
                 "pyqs",
                 item.subjectId,
                 "chapters",
@@ -289,6 +324,7 @@ export default function PyqsManager({ examId }) {
     const handleEdit = (item) => {
         setEditingData(item);
         setFormData({
+            examId: item.examId,
             subjectId: item.subjectId,
             chapterName: item.name,
             questionCount: item.questionCount,
@@ -314,14 +350,17 @@ export default function PyqsManager({ examId }) {
             </div>
 
             {/* FILTERS */}
-            <div className="bg-white p-4 rounded-xl shadow mb-6 flex gap-4">
-
+            <div className="bg-white p-4 rounded-xl shadow mb-6 flex gap-4 flex-wrap">
+                {/* Subject Filter */}
                 <div>
                     <label className="block text-sm font-medium">Filter by Subject</label>
                     <select
                         className="border p-2 rounded"
                         value={filterSubject}
-                        onChange={(e) => setFilterSubject(e.target.value)}
+                        onChange={(e) => {
+                            setFilterSubject(e.target.value);
+                            setCurrentPage(1);
+                        }}
                     >
                         <option value="">All Subjects</option>
                         {subjects.map(sub => (
@@ -330,7 +369,8 @@ export default function PyqsManager({ examId }) {
                     </select>
                 </div>
 
-                <div className="flex-1">
+                {/* Search */}
+                <div className="flex-1 min-w-[200px]">
                     <label className="block text-sm font-medium">Search</label>
                     <input
                         className="border p-2 rounded w-full"
@@ -340,6 +380,33 @@ export default function PyqsManager({ examId }) {
                     />
                 </div>
 
+                {/* Lock Filter */}
+                <div>
+                    <label className="block text-sm font-medium">Filter by Lock</label>
+                    <select
+                        className="border p-2 rounded"
+                        value={filterLock}
+                        onChange={(e) => { setFilterLock(e.target.value); setCurrentPage(1); }}
+                    >
+                        <option value="">All</option>
+                        <option value="locked">Locked</option>
+                        <option value="unlocked">Unlocked</option>
+                    </select>
+                </div>
+
+                {/* Status Filter */}
+                <div>
+                    <label className="block text-sm font-medium">Filter by Status</label>
+                    <select
+                        className="border p-2 rounded"
+                        value={filterStatus}
+                        onChange={(e) => { setFilterStatus(e.target.value); setCurrentPage(1); }}
+                    >
+                        <option value="">All</option>
+                        <option value="draft">Draft</option>
+                        <option value="published">Published</option>
+                    </select>
+                </div>
             </div>
 
             {/* TABLE */}
@@ -348,6 +415,7 @@ export default function PyqsManager({ examId }) {
                 <table className="w-full text-left">
                     <thead className="bg-slate-200">
                         <tr>
+                            <th className="p-3">Exam</th>
                             <th className="p-3">Subject</th>
                             <th className="p-3">Chapter</th>
                             <th className="p-3">Question Count</th>
@@ -360,6 +428,7 @@ export default function PyqsManager({ examId }) {
                     <tbody>
                         {paginatedData.map(item => (
                             <tr key={item.id} className="border-t">
+                                <td className="p-3">{item.examName}</td>
                                 <td className="p-3">{item.subjectName}</td>
                                 <td className="p-3">{item.name}</td>
                                 <td className="p-3">{item.questionCount}</td>
@@ -378,6 +447,39 @@ export default function PyqsManager({ examId }) {
                         ))}
                     </tbody>
                 </table>
+                {/* PAGINATION */}
+                <div className="flex justify-center items-center gap-2 mt-6">
+
+                    <button
+                        disabled={currentPage === 1}
+                        onClick={() => setCurrentPage(prev => prev - 1)}
+                        className="px-3 py-1 border rounded disabled:opacity-40"
+                    >
+                        Prev
+                    </button>
+
+                    {Array.from({ length: totalPages }, (_, i) => (
+                        <button
+                            key={i}
+                            onClick={() => setCurrentPage(i + 1)}
+                            className={`px-3 py-1 border rounded ${currentPage === i + 1
+                                ? "bg-indigo-600 text-white"
+                                : "bg-white"
+                                }`}
+                        >
+                            {i + 1}
+                        </button>
+                    ))}
+
+                    <button
+                        disabled={currentPage === totalPages}
+                        onClick={() => setCurrentPage(prev => prev + 1)}
+                        className="px-3 py-1 border rounded disabled:opacity-40"
+                    >
+                        Next
+                    </button>
+
+                </div>
 
             </div>
 
@@ -389,6 +491,28 @@ export default function PyqsManager({ examId }) {
                         <h3 className="text-lg font-bold">
                             {editingData ? "Edit PYQ" : "Add PYQ"}
                         </h3>
+
+                        {/* EXAM */}
+                        <div>
+                            <label className="block text-sm font-medium">Exam</label>
+
+                            <select
+                                className="border p-2 rounded w-full"
+                                value={formData.examId || ""}
+                                onChange={(e) =>
+                                    setFormData({ ...formData, examId: e.target.value })
+                                }
+                            >
+                                <option value="">Select Exam</option>
+
+                                {exams.map(exam => (
+                                    <option key={exam.id} value={exam.id}>
+                                        {exam.name}
+                                    </option>
+                                ))}
+
+                            </select>
+                        </div>
 
                         {/* SUBJECT */}
                         <div>

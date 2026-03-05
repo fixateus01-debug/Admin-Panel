@@ -12,10 +12,12 @@ import {
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { Upload, X } from "lucide-react";
 import { logActivity } from "../utils/logActivity";
+import Swal from "sweetalert2";
 
 export default function NotificationManager() {
     const [notifications, setNotifications] = useState([]);
     const [users, setUsers] = useState([]);
+    const [userGroups, setUserGroups] = useState([]);
 
     const [isOpen, setIsOpen] = useState(false);
     const [editingId, setEditingId] = useState(null);
@@ -27,16 +29,56 @@ export default function NotificationManager() {
         imageUrl: "",
         type: "general",
         userType: "all",
-        userId: "",
+        userIds: [],
+        userGroupIds: [],
         showNotification: true
     };
 
     const [form, setForm] = useState(emptyForm);
 
+    const toggleUser = (userId) => {
+
+        const exists = form.userIds.includes(userId);
+
+        setForm({
+            ...form,
+            userIds: exists
+                ? form.userIds.filter(id => id !== userId)
+                : [...form.userIds, userId]
+        });
+
+    };
+
+    const toggleUserGroup = (groupId) => {
+
+        const exists = form.userGroupIds.includes(groupId);
+
+        setForm({
+            ...form,
+            userGroupIds: exists
+                ? form.userGroupIds.filter(id => id !== groupId)
+                : [...form.userGroupIds, groupId]
+        });
+
+    };
+
     /* ---------------- FETCH USERS ---------------- */
     useEffect(() => {
         return onSnapshot(collection(db, "users"), snap =>
             setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+        );
+    }, []);
+
+    /* ---------------- FETCH USER GROUPS ---------------- */
+
+    useEffect(() => {
+        return onSnapshot(collection(db, "userGroups"), snap =>
+            setUserGroups(
+                snap.docs.map(d => ({
+                    id: d.id,
+                    ...d.data()
+                }))
+            )
         );
     }, []);
 
@@ -55,7 +97,7 @@ export default function NotificationManager() {
         if (!file) return;
 
         if (!file.type.startsWith("image/")) {
-            alert("Please upload an image file");
+            Swal.fire("Invalid File", "Please upload an image file", "error");
             return;
         }
 
@@ -68,8 +110,14 @@ export default function NotificationManager() {
             await uploadBytes(storageRef, file);
             const downloadURL = await getDownloadURL(storageRef);
             setForm({ ...form, imageUrl: downloadURL });
+            Swal.fire({
+                icon: "success",
+                title: "Image Uploaded",
+                timer: 1200,
+                showConfirmButton: false
+            });
         } catch (err) {
-            alert("Error uploading image: " + err.message);
+            Swal.fire("Upload Failed", err.message, "error");
         } finally {
             setUploading(false);
         }
@@ -85,19 +133,51 @@ export default function NotificationManager() {
         e.preventDefault();
 
         if (!form.title || !form.msg) {
-            alert("Title & Message are required");
+            Swal.fire("Missing Fields", "Title & Message are required", "warning");
             return;
         }
+
+        /* -------- DETERMINE TARGET USERS -------- */
+
+        let finalUsers = [];
+
+        // All Users
+        if (form.userType === "all") {
+            finalUsers = users.map(u => u.id);
+        }
+
+        // Specific Users
+        if (form.userType === "specific") {
+            finalUsers = form.userIds;
+        }
+
+        // Users from Selected Groups
+        if (form.userType === "groups") {
+
+            form.userGroupIds.forEach(groupId => {
+
+                const group = userGroups.find(g => g.id === groupId);
+
+                if (group?.userIds) {
+                    finalUsers.push(...group.userIds);
+                }
+
+            });
+
+        }
+
+        // Remove duplicates
+        finalUsers = [...new Set(finalUsers)];
+
+
+        /* -------- NOTIFICATION PAYLOAD -------- */
 
         const payload = {
             title: form.title,
             msg: form.msg,
             imageUrl: form.imageUrl || "",
             type: form.type,
-            userId:
-                form.userType === "all"
-                    ? users.map(u => u.id)
-                    : [form.userId],
+            userId: finalUsers,
             showNotification: form.showNotification,
             updatedAt: serverTimestamp()
         };
@@ -133,6 +213,13 @@ export default function NotificationManager() {
             });
         }
 
+        Swal.fire({
+            icon: "success",
+            title: editingId ? "Notification Updated" : "Notification Created",
+            timer: 1500,
+            showConfirmButton: false
+        });
+
         setIsOpen(false);
         setEditingId(null);
         setForm(emptyForm);
@@ -140,34 +227,56 @@ export default function NotificationManager() {
 
     /* ---------------- EDIT ---------------- */
     const handleEdit = (n) => {
+
         setEditingId(n.id);
+
+        const ids = n.userId || [];
+
         setForm({
-            title: n.title,
-            msg: n.msg,
-            imageUrl: n.imageUrl,
-            type: n.type,
-            userType: n.userId?.length > 1 ? "all" : "specific",  // ✅ Fixed logic
-            userId: n.userId?.[0] || "",
-            showNotification: n.showNotification
+            title: n.title || "",
+            msg: n.msg || "",
+            imageUrl: n.imageUrl || "",
+            type: n.type || "general",
+            userType: ids.length === users.length ? "all" : "specific",
+            userIds: ids || [],
+            userGroupIds: [],
+            showNotification: n.showNotification ?? true
         });
+
         setIsOpen(true);
     };
 
     /* ---------------- DELETE ---------------- */
     const handleDelete = async (id) => {
-        if (!window.confirm("Delete this notification?")) return;
+
+        const confirm = await Swal.fire({
+            title: "Delete notification?",
+            text: "This action cannot be undone",
+            icon: "warning",
+            showCancelButton: true,
+            confirmButtonColor: "#d33",
+            cancelButtonColor: "#3085d6",
+            confirmButtonText: "Yes, delete it"
+        });
+
+        if (!confirm.isConfirmed) return;
 
         const notif = notifications.find(n => n.id === id);
 
         await deleteDoc(doc(db, "notification", id));
 
-        // ✅ LOG DELETE
         await logActivity({
             actionType: "DELETE_NOTIFICATION",
             description: `Deleted notification: ${notif?.title}`,
             entityId: id,
             entityType: "notification",
         });
+
+        Swal.fire(
+            "Deleted!",
+            "Notification removed successfully",
+            "success"
+        );
     };
 
     return (
@@ -363,23 +472,25 @@ export default function NotificationManager() {
                                         setForm({ ...form, type: e.target.value })
                                     }
                                 >
-                                    <option value="general">General</option>
-                                    <option value="exam">Exam</option>
-                                    <option value="result">Result</option>
-                                    <option value="offer">Offer</option>
+                                    <option value="general">Test Alerts</option>
+                                    <option value="exam">Results</option>
+                                    <option value="offer">Offers</option>
                                 </select>
                             </div>
 
                             {/* TARGET */}
+
                             <div>
                                 <label className="block font-medium mb-2">Target</label>
+
                                 <div className="flex gap-4">
+
                                     <label className="flex items-center">
                                         <input
                                             type="radio"
                                             checked={form.userType === "all"}
                                             onChange={() =>
-                                                setForm({ ...form, userType: "all", userId: "" })
+                                                setForm({ ...form, userType: "all", userIds: [], userGroupIds: [] })
                                             }
                                         />
                                         <span className="ml-2">All Users</span>
@@ -390,31 +501,85 @@ export default function NotificationManager() {
                                             type="radio"
                                             checked={form.userType === "specific"}
                                             onChange={() =>
-                                                setForm({ ...form, userType: "specific" })
+                                                setForm({ ...form, userType: "specific", userGroupIds: [] })
                                             }
                                         />
-                                        <span className="ml-2">Specific User</span>
+                                        <span className="ml-2">Specific Users</span>
                                     </label>
+
+                                    <label className="flex items-center">
+                                        <input
+                                            type="radio"
+                                            checked={form.userType === "groups"}
+                                            onChange={() =>
+                                                setForm({ ...form, userType: "groups", userIds: [] })
+                                            }
+                                        />
+                                        <span className="ml-2">User Groups</span>
+                                    </label>
+
                                 </div>
+
                             </div>
+
+                            {form.userType === "groups" && (
+                                <div>
+
+                                    <label className="block font-medium mb-2">Select User Groups</label>
+
+                                    <div className="max-h-40 overflow-y-auto border p-3 rounded bg-slate-50">
+
+                                        {userGroups.map(group => (
+
+                                            <label key={group.id} className="flex gap-2 mb-2">
+
+                                                <input
+                                                    type="checkbox"
+                                                    checked={form.userGroupIds?.includes(group.id)}
+                                                    onChange={() => toggleUserGroup(group.id)}
+                                                />
+
+                                                {group.name} ({group.userIds?.length || 0} users)
+
+                                            </label>
+
+                                        ))}
+
+                                    </div>
+
+                                </div>
+                            )}
 
                             {form.userType === "specific" && (
                                 <div>
-                                    <label className="block font-medium mb-2">Select User</label>
-                                    <select
-                                        className="border p-3 w-full rounded focus:outline-none focus:ring-2 focus:ring-indigo-600"
-                                        value={form.userId}
-                                        onChange={e =>
-                                            setForm({ ...form, userId: e.target.value })
-                                        }
-                                    >
-                                        <option value="">Select User</option>
+
+                                    <label className="block font-medium mb-2">Select Users</label>
+
+                                    <div className="max-h-40 overflow-y-auto border p-3 rounded bg-slate-50">
+
                                         {users.map(u => (
-                                            <option key={u.id} value={u.id}>
-                                                {u.phone || u.id}
-                                            </option>
+
+                                            <label key={u.id} className="flex gap-2 mb-2 items-center">
+
+                                                <input
+                                                    type="checkbox"
+                                                    checked={form.userIds?.includes(u.id)}
+                                                    onChange={() => toggleUser(u.id)}
+                                                />
+
+                                                <span>
+                                                    <span className="font-medium">{u.name || "No Name"}</span>
+                                                    <span className="text-gray-500 text-sm ml-2">
+                                                        ({u.phone || u.email || u.id})
+                                                    </span>
+                                                </span>
+
+                                            </label>
+
                                         ))}
-                                    </select>
+
+                                    </div>
+
                                 </div>
                             )}
 

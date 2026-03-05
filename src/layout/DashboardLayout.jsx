@@ -24,6 +24,7 @@ import {
   SquareUser,
   Bell,
   Logs,
+  LibraryBig,
 } from "lucide-react";
 
 export default function DashboardLayout() {
@@ -72,6 +73,7 @@ export default function DashboardLayout() {
     { perm: "dashboard", path: "/admin", icon: LayoutDashboard, label: "Dashboard" },
     { perm: "exams", path: "/admin/exams", icon: BookOpen, label: "Exams" },
     { perm: "tests", path: "/admin/tests", icon: FileText, label: "Tests" },
+    { perm: "pyqs", path: "/admin/pyqs", icon: LibraryBig, label: "PYQs" },
     { perm: "users", path: "/admin/users", icon: Users, label: "Users" },
     { perm: "subscriptions", path: "/admin/plans", icon: CreditCard, label: "Subscription Plans" },
     { perm: "subscriptions", path: "/admin/coupons", icon: Ticket, label: "Coupons" },

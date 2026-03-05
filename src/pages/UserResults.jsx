@@ -12,6 +12,7 @@ export default function UserResults() {
   const [examsMap, setExamsMap] = useState({});
   const [search, setSearch] = useState("");
   const [expandedId, setExpandedId] = useState(null);
+  const [examFilter, setExamFilter] = useState("");
 
   /* ---------------- FETCH RESULTS ---------------- */
   useEffect(() => {
@@ -66,12 +67,16 @@ export default function UserResults() {
       const name = user?.name?.toLowerCase() || "";
       const email = user?.email?.toLowerCase() || "";
 
-      return (
+      const matchesSearch =
         name.includes(search.toLowerCase()) ||
-        email.includes(search.toLowerCase())
-      );
+        email.includes(search.toLowerCase());
+
+      const matchesExam =
+        !examFilter || r.examId === examFilter;
+
+      return matchesSearch && matchesExam;
     });
-  }, [results, search, usersMap]);
+  }, [results, search, usersMap, examFilter]);
 
   return (
     <div className="p-10 bg-slate-100 min-h-screen">
@@ -80,12 +85,31 @@ export default function UserResults() {
         User Results
       </h2>
 
-      <input
-        type="text"
-        placeholder="Search user..."
-        className="border p-3 rounded-lg mb-6 w-72"
-        onChange={(e) => setSearch(e.target.value)}
-      />
+      <div className="flex gap-4 mb-6">
+
+        <input
+          type="text"
+          placeholder="Search user..."
+          className="border p-3 rounded-lg w-72"
+          onChange={(e) => setSearch(e.target.value)}
+        />
+
+        <select
+          value={examFilter}
+          onChange={(e) => setExamFilter(e.target.value)}
+          className="border p-3 rounded-lg bg-white"
+        >
+          <option value="">All Exams</option>
+
+          {Object.entries(examsMap).map(([examId, examName]) => (
+            <option key={examId} value={examId}>
+              {examName}
+            </option>
+          ))}
+
+        </select>
+
+      </div>
 
       <div className="space-y-4">
         {filtered.map(result => {
@@ -208,8 +232,8 @@ export default function UserResults() {
                     Created At:{" "}
                     {result.createdAt
                       ? new Date(
-                          result.createdAt.toDate()
-                        ).toLocaleString()
+                        result.createdAt.toDate()
+                      ).toLocaleString()
                       : "-"}
                   </div>
 
