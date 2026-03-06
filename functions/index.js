@@ -1,8 +1,12 @@
-import { onCall } from "firebase-functions/v2/https";
-import admin from "firebase-admin";
-import { HttpsError } from "firebase-functions/v2/https";
+import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { initializeApp } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
 
-admin.initializeApp();
+initializeApp();
+
+const auth = getAuth();
+const db = getFirestore();
 
 export const createAdminUser = onCall(async (request) => {
 
@@ -13,7 +17,7 @@ export const createAdminUser = onCall(async (request) => {
     throw new Error("Not authenticated");
   }
 
-  const requesterDoc = await admin.firestore()
+  const requesterDoc = await db
     .collection("admins")
     .doc(request.auth.uid)
     .get();
@@ -24,14 +28,14 @@ export const createAdminUser = onCall(async (request) => {
 
   try {
     // Create Auth user
-    const userRecord = await admin.auth().createUser({
+    const userRecord = await auth.createUser({
       email,
       password,
       displayName: name
     });
 
     // Create Firestore admin doc
-    await admin.firestore()
+    await db
       .collection("admins")
       .doc(userRecord.uid)
       .set({
@@ -39,7 +43,7 @@ export const createAdminUser = onCall(async (request) => {
         email,
         role,
         permissions,
-        createdAt: admin.firestore.FieldValue.serverTimestamp()
+        createdAt: FieldValue.serverTimestamp()
       });
 
     return { success: true };
@@ -50,6 +54,86 @@ export const createAdminUser = onCall(async (request) => {
       "invalid-argument",
       err.errorInfo?.message || "Invalid input"
     );
+  }
+
+});
+
+export const updateAdminPassword = onCall(async (request) => {
+
+  const { uid, password } = request.data;
+
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Not authenticated");
+  }
+
+  const requesterDoc = await db
+    .collection("admins")
+    .doc(request.auth.uid)
+    .get();
+
+  if (!requesterDoc.exists || requesterDoc.data().role !== "superadmin") {
+    throw new HttpsError("permission-denied", "Only superadmin can update password");
+  }
+
+  try {
+
+    await auth.updateUser(uid, {
+      password: password
+    });
+
+    return { success: true };
+
+  } catch (err) {
+
+    throw new HttpsError(
+      "invalid-argument",
+      err.errorInfo?.message || "Error updating password"
+    );
+
+  }
+
+});
+
+export const deleteAdminUser = onCall(async (request) => {
+
+  const { uid } = request.data;
+
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Not authenticated");
+  }
+
+  const requesterDoc = await db
+    .collection("admins")
+    .doc(request.auth.uid)
+    .get();
+
+  if (!requesterDoc.exists || requesterDoc.data().role !== "superadmin") {
+    throw new HttpsError("permission-denied", "Only superadmin can delete admins");
+  }
+
+  // Prevent deleting self
+  if (uid === request.auth.uid) {
+    throw new HttpsError("failed-precondition", "You cannot delete yourself");
+  }
+
+  try {
+
+    await auth.deleteUser(uid);
+
+    await db
+      .collection("admins")
+      .doc(uid)
+      .delete();
+
+    return { success: true };
+
+  } catch (err) {
+
+    throw new HttpsError(
+      "invalid-argument",
+      err.message || "Error deleting admin"
+    );
+
   }
 
 });

@@ -17,7 +17,6 @@ const ALL_PERMISSIONS = [
   "privacy",
   "subjects",
   "notifications",
-  "settings",
 ];
 
 export default function AdminManager() {
@@ -26,6 +25,7 @@ export default function AdminManager() {
   const [currentAdmin, setCurrentAdmin] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
+  const [showEditPassword, setShowEditPassword] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -40,6 +40,7 @@ export default function AdminManager() {
   const [editFormData, setEditFormData] = useState({
     name: "",
     email: "",
+    password: "",
     role: "editor",
     permissions: []
   });
@@ -121,22 +122,28 @@ export default function AdminManager() {
   /* ---------------- EDIT ADMIN ---------------- */
   const handleEditAdmin = (admin) => {
     setEditingAdminId(admin.id);
+    setShowEditPassword(false);
+
     setEditFormData({
       name: admin.name,
       email: admin.email,
+      password: "",
       role: admin.role,
       permissions: admin.permissions || []
     });
+
     setIsEditModalOpen(true);
   };
 
   const updateAdmin = async () => {
+
     if (!editFormData.name || !editFormData.email) {
       alert("Name & Email are required.");
       return;
     }
 
     try {
+
       await updateDoc(doc(db, "admins", editingAdminId), {
         name: editFormData.name,
         email: editFormData.email,
@@ -144,15 +151,32 @@ export default function AdminManager() {
         permissions: editFormData.permissions
       });
 
+      // Change password if entered
+      if (editFormData.password) {
+
+        const callable = httpsCallable(functions, "updateAdminPassword");
+
+        await callable({
+          uid: editingAdminId,
+          password: editFormData.password
+        });
+
+      }
+
       alert("Admin updated successfully");
+
       setIsEditModalOpen(false);
+
       setEditingAdminId(null);
+
       setEditFormData({
         name: "",
         email: "",
+        password: "",
         role: "editor",
         permissions: []
       });
+
     } catch (err) {
       alert("Error updating admin: " + err.message);
     }
@@ -190,6 +214,18 @@ export default function AdminManager() {
     }
   };
 
+  const deleteAdmin = async (uid) => {
+    if (!window.confirm("Delete this admin?")) return;
+    try {
+      const callable = httpsCallable(functions, "deleteAdminUser");
+      await callable({ uid });
+      await deleteDoc(doc(db, "admins", uid));
+      alert("Admin deleted successfully");
+    } catch (err) {
+      alert("Error deleting admin: " + err.message);
+    }
+  };
+
   return (
     <div className="p-10">
 
@@ -206,7 +242,7 @@ export default function AdminManager() {
             placeholder="Enter admin name"
             className="border p-2 rounded w-full focus:outline-none focus:ring-2 focus:ring-indigo-600"
             value={formData.name}
-            onChange={e => setFormData({...formData, name: e.target.value})}
+            onChange={e => setFormData({ ...formData, name: e.target.value })}
           />
         </div>
 
@@ -217,7 +253,7 @@ export default function AdminManager() {
             placeholder="Enter admin email"
             className="border p-2 rounded w-full focus:outline-none focus:ring-2 focus:ring-indigo-600"
             value={formData.email}
-            onChange={e => setFormData({...formData, email: e.target.value})}
+            onChange={e => setFormData({ ...formData, email: e.target.value })}
           />
         </div>
 
@@ -230,7 +266,7 @@ export default function AdminManager() {
               placeholder="Enter password (min 6 characters)"
               className="border p-2 rounded w-full focus:outline-none focus:ring-2 focus:ring-indigo-600 pr-10"
               value={formData.password}
-              onChange={e => setFormData({...formData, password: e.target.value})}
+              onChange={e => setFormData({ ...formData, password: e.target.value })}
             />
             <button
               type="button"
@@ -248,7 +284,7 @@ export default function AdminManager() {
           <select
             className="border p-2 rounded w-full bg-white focus:outline-none focus:ring-2 focus:ring-indigo-600"
             value={formData.role}
-            onChange={e => setFormData({...formData, role: e.target.value})}
+            onChange={e => setFormData({ ...formData, role: e.target.value })}
           >
             <option value="editor">Editor</option>
           </select>
@@ -294,13 +330,23 @@ export default function AdminManager() {
                 Permissions: {admin.permissions?.length > 0 ? admin.permissions.join(", ") : "None"}
               </div>
             </div>
-            <button
-              onClick={() => handleEditAdmin(admin)}
-              className="text-blue-600 hover:text-blue-800 transition p-2"
-              title="Edit Admin"
-            >
-              <Edit size={20} />
-            </button>
+            <div className="flex gap-3">
+
+              <button
+                onClick={() => handleEditAdmin(admin)}
+                className="text-blue-600 hover:text-blue-800 transition p-2"
+              >
+                <Edit size={20} />
+              </button>
+
+              <button
+                onClick={() => deleteAdmin(admin.id)}
+                className="text-red-600 hover:text-red-800 transition p-2"
+              >
+                Delete
+              </button>
+
+            </div>
           </div>
         ))}
       </div>
@@ -327,7 +373,7 @@ export default function AdminManager() {
                 placeholder="Enter admin name"
                 className="border p-2 rounded w-full focus:outline-none focus:ring-2 focus:ring-indigo-600"
                 value={editFormData.name}
-                onChange={e => setEditFormData({...editFormData, name: e.target.value})}
+                onChange={e => setEditFormData({ ...editFormData, name: e.target.value })}
               />
             </div>
 
@@ -338,8 +384,33 @@ export default function AdminManager() {
                 placeholder="Enter admin email"
                 className="border p-2 rounded w-full focus:outline-none focus:ring-2 focus:ring-indigo-600"
                 value={editFormData.email}
-                onChange={e => setEditFormData({...editFormData, email: e.target.value})}
+                onChange={e => setEditFormData({ ...editFormData, email: e.target.value })}
               />
+            </div>
+
+            {/* Password Change */}
+            <div className="mb-4">
+              <label className="block font-medium mb-2">New Password (optional)</label>
+
+              <div className="relative flex items-center">
+                <input
+                  type={showEditPassword ? "text" : "password"}
+                  placeholder="Leave blank if not changing password"
+                  className="border p-2 rounded w-full focus:outline-none focus:ring-2 focus:ring-indigo-600 pr-10"
+                  value={editFormData.password || ""}
+                  onChange={e =>
+                    setEditFormData({ ...editFormData, password: e.target.value })
+                  }
+                />
+
+                <button
+                  type="button"
+                  onClick={() => setShowEditPassword(!showEditPassword)}
+                  className="absolute right-3 text-slate-600 hover:text-indigo-600 transition"
+                >
+                  {showEditPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
 
             {/* Role Field */}
@@ -348,7 +419,7 @@ export default function AdminManager() {
               <select
                 className="border p-2 rounded w-full bg-white focus:outline-none focus:ring-2 focus:ring-indigo-600"
                 value={editFormData.role}
-                onChange={e => setEditFormData({...editFormData, role: e.target.value})}
+                onChange={e => setEditFormData({ ...editFormData, role: e.target.value })}
               >
                 <option value="editor">Editor</option>
               </select>
