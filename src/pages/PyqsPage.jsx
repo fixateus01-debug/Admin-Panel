@@ -50,6 +50,7 @@ export default function PyqsManager({ examId }) {
                 snap.docs.map(doc => ({
                     id: doc.id,
                     ...doc.data(),
+                    chapters: doc.data().chapters || []   // <-- ADD THIS
                 }))
             );
         };
@@ -220,7 +221,7 @@ export default function PyqsManager({ examId }) {
                     collection(
                         db,
                         "exams",
-                        examId,
+                        formData.examId,
                         "pyqs",
                         formData.subjectId,
                         "chapters"
@@ -233,6 +234,8 @@ export default function PyqsManager({ examId }) {
                 setAllChapters(prev => [
                     {
                         id: savedDocId,
+                        examId: formData.examId,
+                        examName: exams.find(e => e.id === formData.examId)?.name || "",
                         subjectId: formData.subjectId,
                         subjectName,
                         ...basePayload,
@@ -543,11 +546,9 @@ export default function PyqsManager({ examId }) {
                                     }
                                 >
                                     <option value="">Select Chapter</option>
-                                    {subjects
-                                        .find(s => s.id === formData.subjectId)
-                                        ?.chapters?.map((ch, i) => (
-                                            <option key={i} value={ch}>{ch}</option>
-                                        ))}
+                                    {(subjects.find(s => s.id === formData.subjectId)?.chapters || []).map((ch, i) => (
+                                        <option key={i} value={ch}>{ch}</option>
+                                    ))}
                                 </select>
                             </div>
                         )}
